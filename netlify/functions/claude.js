@@ -4,7 +4,7 @@ exports.handler = async function(event) {
   }
 
   const headers = {
-    'Access-Control-Allow-Origin': 'https://kirafrance.com',
+   'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json'
   };
