@@ -23,7 +23,7 @@ exports.handler = async function(event) {
   };
 
   try {
-    const { messages, mode, quizAnswers } = JSON.parse(event.body);
+    const { messages, mode, quizAnswers, email, diagnosticResult } = JSON.parse(event.body);
 
     const CATALOGUE = `
 CATALOGUE KIRA GLOW — produits disponibles sur kirafrance.com :
@@ -116,6 +116,121 @@ RÈGLES ABSOLUES :
 
 Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il apparaît dans le catalogue.`;
 
+    // ==========================================
+    // MODE KLAVIYO — Enregistrer profil + envoyer email
+    // ==========================================
+    if (mode === 'klaviyo') {
+      if (!email || !diagnosticResult) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email et diagnostic requis' }) };
+      }
+
+      const r = diagnosticResult;
+
+      // 1. Créer/mettre à jour le profil dans Klaviyo
+      const profileRes = await fetch('https://a.klaviyo.com/api/profiles/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Klaviyo-API-Key ${process.env.KLAVIYO_API_KEY}`,
+          'Content-Type': 'application/json',
+          'revision': '2024-02-15'
+        },
+        body: JSON.stringify({
+          data: {
+            type: 'profile',
+            attributes: {
+              email,
+              properties: {
+                profil_peau: r.profile_name,
+                type_peau: r.profile_type,
+                kira_diagnostic: true,
+                diagnostic_date: new Date().toISOString().split('T')[0]
+              }
+            }
+          }
+        })
+      });
+
+      const profileData = await profileRes.json();
+      const profileId = profileData?.data?.id;
+
+      // 2. Abonner à la liste principale
+      if (profileId) {
+        await fetch(`https://a.klaviyo.com/api/lists/`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Klaviyo-API-Key ${process.env.KLAVIYO_API_KEY}`,
+            'revision': '2024-02-15'
+          }
+        }).then(async (listsRes) => {
+          const lists = await listsRes.json();
+          const mainList = lists?.data?.find(l => l.attributes.name === 'Kira Glow — Clientes');
+          if (mainList) {
+            await fetch(`https://a.klaviyo.com/api/lists/${mainList.id}/relationships/profiles/`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Klaviyo-API-Key ${process.env.KLAVIYO_API_KEY}`,
+                'Content-Type': 'application/json',
+                'revision': '2024-02-15'
+              },
+              body: JSON.stringify({ data: [{ type: 'profile', id: profileId }] })
+            });
+          }
+        });
+      }
+
+      // 3. Envoyer l'email de diagnostic via Klaviyo
+      const morningSteps = (r.morning_routine || []).map(s =>
+        `${s.step}. ${s.category} — ${s.product_name}\n   ${s.why}`
+      ).join('\n\n');
+
+      const eveningSteps = (r.evening_routine || []).map(s =>
+        `${s.step}. ${s.category} — ${s.product_name}\n   ${s.why}`
+      ).join('\n\n');
+
+      const actifs = (r.key_actifs || []).map(a => `• ${a.name} : ${a.benefit}`).join('\n');
+      const tips = (r.tips || []).map(t => `• ${t}`).join('\n');
+
+      await fetch('https://a.klaviyo.com/api/events/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Klaviyo-API-Key ${process.env.KLAVIYO_API_KEY}`,
+          'Content-Type': 'application/json',
+          'revision': '2024-02-15'
+        },
+        body: JSON.stringify({
+          data: {
+            type: 'event',
+            attributes: {
+              profile: { data: { type: 'profile', attributes: { email } } },
+              metric: { data: { type: 'metric', attributes: { name: 'Diagnostic Complété' } } },
+              properties: {
+                profil_name: r.profile_name,
+                profil_type: r.profile_type,
+                profil_desc: r.profile_desc,
+                morning_routine: morningSteps,
+                evening_routine: eveningSteps,
+                actifs_cles: actifs,
+                conseils: tips,
+                timeline_week2: r.timeline?.week2 || '',
+                timeline_month1: r.timeline?.month1 || '',
+                timeline_month3: r.timeline?.month3 || '',
+                boutique_url: 'https://kirafrance.com/collections/all'
+              }
+            }
+          }
+        })
+      });
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ success: true, message: 'Profil enregistré et email envoyé' })
+      };
+    }
+
+    // ==========================================
+    // MODE DIAGNOSTIC — Génération IA
+    // ==========================================
     let systemPrompt, userMessages;
 
     if (mode === 'diagnostic') {
