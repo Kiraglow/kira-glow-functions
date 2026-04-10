@@ -117,7 +117,7 @@ RÈGLES ABSOLUES :
 Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il apparaît dans le catalogue.`;
 
     // ==========================================
-    // MODE KLAVIYO — Enregistrer profil + envoyer email
+    // MODE KLAVIYO
     // ==========================================
     if (mode === 'klaviyo') {
       if (!email || !diagnosticResult) {
@@ -126,7 +126,7 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
 
       const r = diagnosticResult;
 
-      // 1. Créer/mettre à jour le profil dans Klaviyo
+      // 1. Créer/mettre à jour le profil
       const profileRes = await fetch('https://a.klaviyo.com/api/profiles/', {
         method: 'POST',
         headers: {
@@ -155,41 +155,50 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
 
       // 2. Abonner à la liste principale
       if (profileId) {
-        await fetch(`https://a.klaviyo.com/api/lists/`, {
-          method: 'GET',
+        const listsRes = await fetch('https://a.klaviyo.com/api/lists/', {
           headers: {
             'Authorization': `Klaviyo-API-Key ${process.env.KLAVIYO_API_KEY}`,
             'revision': '2024-02-15'
           }
-        }).then(async (listsRes) => {
-          const lists = await listsRes.json();
-          const mainList = lists?.data?.find(l => l.attributes.name === 'Kira Glow — Clientes');
-          if (mainList) {
-            await fetch(`https://a.klaviyo.com/api/lists/${mainList.id}/relationships/profiles/`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Klaviyo-API-Key ${process.env.KLAVIYO_API_KEY}`,
-                'Content-Type': 'application/json',
-                'revision': '2024-02-15'
-              },
-              body: JSON.stringify({ data: [{ type: 'profile', id: profileId }] })
-            });
-          }
         });
+        const lists = await listsRes.json();
+        const mainList = lists?.data?.find(l => l.attributes.name === 'Kira Glow — Clientes');
+        if (mainList) {
+          await fetch(`https://a.klaviyo.com/api/lists/${mainList.id}/relationships/profiles/`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Klaviyo-API-Key ${process.env.KLAVIYO_API_KEY}`,
+              'Content-Type': 'application/json',
+              'revision': '2024-02-15'
+            },
+            body: JSON.stringify({ data: [{ type: 'profile', id: profileId }] })
+          });
+        }
       }
 
-      // 3. Envoyer l'email de diagnostic via Klaviyo
-      const morningSteps = (r.morning_routine || []).map(s =>
-        `${s.step}. ${s.category} — ${s.product_name}\n   ${s.why}`
-      ).join('\n\n');
+      // 3. Formater les étapes individuellement
+      const formatSteps = (steps) => {
+        const result = {};
+        (steps || []).forEach((s, i) => {
+          const n = i + 1;
+          result[`step${n}_category`] = s.category || '';
+          result[`step${n}_product`] = s.product_name || '';
+          result[`step${n}_why`] = s.why || '';
+          result[`step${n}_how`] = s.how || '';
+          result[`step${n}_wait`] = s.wait || null;
+        });
+        result['total'] = (steps || []).length;
+        return result;
+      };
 
-      const eveningSteps = (r.evening_routine || []).map(s =>
-        `${s.step}. ${s.category} — ${s.product_name}\n   ${s.why}`
-      ).join('\n\n');
-
+      const morningSteps = formatSteps(r.morning_routine);
+      const eveningSteps = formatSteps(r.evening_routine);
       const actifs = (r.key_actifs || []).map(a => `• ${a.name} : ${a.benefit}`).join('\n');
+      const avoider = (r.actifs_avoid || []).map(a => `• ${a.name} : ${a.reason}`).join('\n');
+      const incompats = (r.incompatibilities || []).map(i => `❌ ${i.combo}\n→ ${i.reason}${i.solution ? `\n✅ ${i.solution}` : ''}`).join('\n\n');
       const tips = (r.tips || []).map(t => `• ${t}`).join('\n');
 
+      // 4. Envoyer l'événement
       await fetch('https://a.klaviyo.com/api/events/', {
         method: 'POST',
         headers: {
@@ -207,9 +216,49 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
                 profil_name: r.profile_name,
                 profil_type: r.profile_type,
                 profil_desc: r.profile_desc,
-                morning_routine: morningSteps,
-                evening_routine: eveningSteps,
+                morning_step1_category: morningSteps.step1_category || '',
+                morning_step1_product: morningSteps.step1_product || '',
+                morning_step1_why: morningSteps.step1_why || '',
+                morning_step1_how: morningSteps.step1_how || '',
+                morning_step2_category: morningSteps.step2_category || '',
+                morning_step2_product: morningSteps.step2_product || '',
+                morning_step2_why: morningSteps.step2_why || '',
+                morning_step2_how: morningSteps.step2_how || '',
+                morning_step3_category: morningSteps.step3_category || '',
+                morning_step3_product: morningSteps.step3_product || '',
+                morning_step3_why: morningSteps.step3_why || '',
+                morning_step3_how: morningSteps.step3_how || '',
+                morning_step4_category: morningSteps.step4_category || '',
+                morning_step4_product: morningSteps.step4_product || '',
+                morning_step4_why: morningSteps.step4_why || '',
+                morning_step4_how: morningSteps.step4_how || '',
+                morning_step5_category: morningSteps.step5_category || '',
+                morning_step5_product: morningSteps.step5_product || '',
+                morning_step5_why: morningSteps.step5_why || '',
+                morning_step5_how: morningSteps.step5_how || '',
+                evening_step1_category: eveningSteps.step1_category || '',
+                evening_step1_product: eveningSteps.step1_product || '',
+                evening_step1_why: eveningSteps.step1_why || '',
+                evening_step1_how: eveningSteps.step1_how || '',
+                evening_step2_category: eveningSteps.step2_category || '',
+                evening_step2_product: eveningSteps.step2_product || '',
+                evening_step2_why: eveningSteps.step2_why || '',
+                evening_step2_how: eveningSteps.step2_how || '',
+                evening_step3_category: eveningSteps.step3_category || '',
+                evening_step3_product: eveningSteps.step3_product || '',
+                evening_step3_why: eveningSteps.step3_why || '',
+                evening_step3_how: eveningSteps.step3_how || '',
+                evening_step4_category: eveningSteps.step4_category || '',
+                evening_step4_product: eveningSteps.step4_product || '',
+                evening_step4_why: eveningSteps.step4_why || '',
+                evening_step4_how: eveningSteps.step4_how || '',
+                evening_step5_category: eveningSteps.step5_category || '',
+                evening_step5_product: eveningSteps.step5_product || '',
+                evening_step5_why: eveningSteps.step5_why || '',
+                evening_step5_how: eveningSteps.step5_how || '',
                 actifs_cles: actifs,
+                actifs_eviter: avoider,
+                incompatibilites: incompats,
                 conseils: tips,
                 timeline_week2: r.timeline?.week2 || '',
                 timeline_month1: r.timeline?.month1 || '',
@@ -229,7 +278,7 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
     }
 
     // ==========================================
-    // MODE DIAGNOSTIC — Génération IA
+    // MODE DIAGNOSTIC
     // ==========================================
     let systemPrompt, userMessages;
 
@@ -263,6 +312,9 @@ Génère le diagnostic complet en JSON.`
       userMessages = messages;
     }
 
+    // ==========================================
+    // APPEL API CLAUDE
+    // ==========================================
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
