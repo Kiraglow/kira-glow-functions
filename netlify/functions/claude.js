@@ -1,4 +1,5 @@
-exports.handler = async function(event) {
+exports.handler = async function(event, context) {
+  context.callbackWaitsForEmptyEventLoop = false;
 
   if (event.httpMethod === 'OPTIONS') {
     return {
