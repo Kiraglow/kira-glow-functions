@@ -1,6 +1,6 @@
 exports.handler = async function(event, context) {
   context.callbackWaitsForEmptyEventLoop = false;
-
+ 
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
