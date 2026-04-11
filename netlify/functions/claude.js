@@ -11,7 +11,7 @@ exports.handler = async function(event) {
       body: ''
     };
   }
- 
+
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
@@ -126,7 +126,6 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
 
       const r = diagnosticResult;
 
-      // 1. Créer/mettre à jour le profil
       const profileRes = await fetch('https://a.klaviyo.com/api/profiles/', {
         method: 'POST',
         headers: {
@@ -153,7 +152,6 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
       const profileData = await profileRes.json();
       const profileId = profileData?.data?.id;
 
-      // 2. Abonner à la liste principale
       if (profileId) {
         const listsRes = await fetch('https://a.klaviyo.com/api/lists/', {
           headers: {
@@ -176,7 +174,6 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
         }
       }
 
-      // 3. Formater les étapes individuellement
       const formatSteps = (steps) => {
         const result = {};
         (steps || []).forEach((s, i) => {
@@ -198,7 +195,6 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
       const incompats = (r.incompatibilities || []).map(i => `❌ ${i.combo}\n→ ${i.reason}${i.solution ? `\n✅ ${i.solution}` : ''}`).join('\n\n');
       const tips = (r.tips || []).map(t => `• ${t}`).join('\n');
 
-      // 4. Envoyer l'événement
       await fetch('https://a.klaviyo.com/api/events/', {
         method: 'POST',
         headers: {
@@ -278,7 +274,7 @@ Quand tu suggères un produit, mentionne toujours son nom exact tel qu'il appara
     }
 
     // ==========================================
-    // MODE DIAGNOSTIC
+    // MODE DIAGNOSTIC + CHAT
     // ==========================================
     let systemPrompt, userMessages;
 
@@ -312,9 +308,6 @@ Génère le diagnostic complet en JSON.`
       userMessages = messages;
     }
 
-    // ==========================================
-    // APPEL API CLAUDE
-    // ==========================================
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -323,8 +316,8 @@ Génère le diagnostic complet en JSON.`
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
+        model: 'claude-sonnet-4-5',
+        max_tokens: 4000,
         system: systemPrompt,
         messages: userMessages
       })
