@@ -309,8 +309,12 @@ Génère le diagnostic complet en JSON.`
       userMessages = messages;
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': process.env.ANTHROPIC_API_KEY,
@@ -324,6 +328,7 @@ Génère le diagnostic complet en JSON.`
       })
     });
 
+    clearTimeout(timeout);
     const data = await response.json();
 
     if (data.error) {
